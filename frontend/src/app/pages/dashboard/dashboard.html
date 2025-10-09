@@ -1,0 +1,182 @@
+<div class="dashboard-container">
+  <header class="dashboard-header">
+    <div class="header-left">
+      <h1 class="logo-text">CYBER MONITOR</h1>
+      <p class="tagline">Real-time HTTP Traffic Analysis</p>
+    </div>
+    <div class="header-actions">
+      <button *ngIf="showFullDetails" class="action-button primary" (click)="exitFullDetails()">
+        <i class="fas fa-arrow-left"></i> Back to List
+      </button>
+      <button *ngIf="!showFullDetails" class="action-button primary" (click)="refreshNo()">
+        <i class="fas fa-sync-alt"></i> Refresh Data
+      </button>
+      <button class="action-button danger" (click)="logout()">
+        <i class="fas fa-sign-out-alt"></i> Logout
+      </button>
+    </div>
+  </header>
+  <ng-container *ngIf="!showFullDetails">
+    <div *ngIf="loading" class="loading-state">
+      <div class="spinner"></div>
+      <p>Loading encrypted data streams...</p>
+    </div>
+    <div *ngIf="error" class="error-state">
+      <p><i class="fas fa-exclamation-triangle"></i> {{ error }}</p>
+      <button class="action-button primary" (click)="fetchRequests()">Retry Connection</button>
+    </div>
+  </ng-container>
+  
+  <ng-container *ngIf="!showFullDetails && !loading && !error">
+    <section class="dashboard-stats-grid">
+      <div class="stat-card total-requests">
+        <div class="icon"><i class="fas fa-globe"></i></div>
+        <div class="stat-content">
+          <h3>Total Requests</h3>
+          <p class="stat-value">{{ totalRequests }}</p>
+        </div>
+      </div>
+      <div class="stat-card successful-requests">
+        <div class="icon"><i class="fas fa-check-circle"></i></div>
+        <div class="stat-content">
+          <h3>Successful (2xx)</h3>
+          <p class="stat-value">{{ successfulRequests }}</p>
+        </div>
+      </div>
+      <div class="stat-card failed-requests">
+        <div class="icon"><i class="fas fa-times-circle"></i></div>
+        <div class="stat-content">
+          <h3>Failed (4xx/5xx)</h3>
+          <p class="stat-value">{{ failedRequests }}</p>
+        </div>
+      </div>
+    </section>
+    
+    <section class="request-filters">
+      <div class="filter-group search-filter">
+        <i class="fas fa-search filter-icon"></i>
+        <input type="text" placeholder="Search URL or Method..." [(ngModel)]="filterTerm" (input)="applyFilters()" class="filter-input">
+      </div>
+      <div class="filter-group dropdown-filter">
+        <label for="statusFilter" class="filter-label">Status:</label>
+        <select id="statusFilter" [(ngModel)]="filterStatus" (change)="applyFilters()" class="filter-select">
+          <option value="all">All</option>
+          <option value="2xx">2xx Success</option>
+          <option value="3xx">3xx Redirection</option>
+          <option value="4xx">4xx Client Error</option>
+          <option value="5xx">5xx Server Error</option>
+        </select>
+      </div>
+      <div class="filter-group dropdown-filter">
+        <label for="methodFilter" class="filter-label">Method:</label>
+        <select id="methodFilter" [(ngModel)]="filterMethod" (change)="applyFilters()" class="filter-select">
+          <option value="all">All</option>
+          <option value="GET">GET</option>
+          <option value="POST">POST</option>
+          <option value="PUT">PUT</option>
+          <option value="DELETE">DELETE</option>
+          <option value="PATCH">PATCH</option>
+          <option value="OPTIONS">OPTIONS</option>
+          </select>
+      </div>
+      <button class="action-button secondary-outline clear-filters-button" (click)="clearFilters()">
+        <i class="fas fa-redo"></i> Clear Filters
+      </button>
+    </section>
+    <section class="request-list-full-width">
+      <div class="request-list-card">
+        <h2><i class="fas fa-network-wired"></i> Incoming Requests ({{ filteredRequestList.length }} items)</h2>
+        <div class="request-list-header">
+          <span>Status</span>
+          <span>Method</span>
+          <span>Endpoint</span>
+          <span>Duration</span>
+          <span>Timestamp</span>
+        </div>
+        <div class="request-list-body custom-scrollbar">
+          <div *ngFor="let req of filteredRequestList" class="request-item"
+               (click)="viewFullDetails(req)"
+               [class.selected]="selectedRequest?.id === req.id">
+            <span class="status-indicator" [class]="getStatusClass(req.status)">{{ req.status }}</span>
+            <span class="method-tag method-{{req.method.toLowerCase()}}">{{ req.method }}</span>
+            <span class="url-path">{{ shortUrl(req.url) }}</span>
+            <span class="duration-time">{{ req.duration }} ms</span>
+            <span class="timestamp-text">{{ formatDate(req.timestamp) }}</span>
+          </div>
+          <p *ngIf="filteredRequestList.length === 0" class="no-data-message">No traffic matches your filters. Adjust filter settings or wait for new data.</p>
+        </div>
+      </div>
+    </section>
+  </ng-container>
+  
+  <ng-container *ngIf="showFullDetails">
+    <div class="full-details-view">
+      <div *ngIf="loadingFullDetails" class="loading-state full-page-loader">
+        <div class="spinner"></div>
+        <p>Loading full request details...</p>
+      </div>
+      <div *ngIf="fullDetailsError" class="error-state full-page-error">
+        <p><i class="fas fa-exclamation-triangle"></i> {{ fullDetailsError }}</p>
+        <button class="action-button primary" (click)="fullDetailRequest && viewFullDetails(fullDetailRequest)">Retry</button>
+        <button class="action-button secondary-outline" (click)="exitFullDetails()">Back to List</button>
+      </div>
+      <div *ngIf="fullDetailRequest && !loadingFullDetails" class="full-details-content">
+        <h1>Full Details for Request ID: {{ fullDetailRequest.id }}</h1>
+        <section class="details-section">
+          <h2>Summary</h2>
+          <div class="summary-grid">
+            <div class="summary-item"><strong>Method:</strong> <span class="method-tag method-{{fullDetailRequest.method.toLowerCase()}}">{{ fullDetailRequest.method }}</span></div>
+            <div class="summary-item"><strong>Status:</strong> <span [class]="getStatusClass(fullDetailRequest.status)">{{ fullDetailRequest.status }}</span></div>
+            <div class="summary-item"><strong>Duration:</strong> {{ fullDetailRequest.duration }} ms</div>
+            <div class="summary-item"><strong>Timestamp:</strong> {{ formatDate(fullDetailRequest.timestamp) }}</div>
+            <div class="summary-item full-width"><strong>URL:</strong> <span class="long-url">{{ fullDetailRequest.url }}</span></div>
+          </div>
+        </section>
+        <section class="details-section">
+          <h2>Request Body</h2>
+          <pre class="code-block custom-scrollbar">{{ formatJson(fullDetailRequest.requestBody) }}</pre>
+        </section>
+        <section class="details-section">
+          <h2>Request Headers</h2>
+          <div class="headers-list">
+            <ng-container *ngIf="fullDetailRequest.requestHeaders; else noHeaders">
+              <div *ngFor="let header of fullDetailRequest.requestHeaders | keyvalue" class="header-item">
+                <strong>{{ header.key }}:</strong> <span>{{ header.value }}</span>
+              </div>
+            </ng-container>
+            <ng-template #noHeaders>
+              <p class="no-data-message">No request headers.</p>
+            </ng-template>
+          </div>
+        </section>
+        <section class="details-section">
+          <h2>Request Cookies</h2>
+          <pre class="code-block custom-scrollbar">{{ formatCookies(fullDetailRequest.requestCookies) }}</pre>
+          <p *ngIf="!fullDetailRequest.requestCookies || fullDetailRequest.requestCookies.length === 0" class="no-data-message">No request cookies.</p>
+        </section>
+        <section class="details-section">
+          <h2>Response Body</h2>
+          <pre class="code-block custom-scrollbar">{{ formatJson(fullDetailRequest.responseBody) }}</pre>
+        </section>
+        <section class="details-section">
+          <h2>Response Headers</h2>
+          <div class="headers-list">
+            <ng-container *ngIf="fullDetailRequest.responseHeaders; else noHeadersResponse">
+              <div *ngFor="let header of fullDetailRequest.responseHeaders | keyvalue" class="header-item">
+                <strong>{{ header.key }}:</strong> <span>{{ header.value }}</span>
+              </div>
+            </ng-container>
+            <ng-template #noHeadersResponse>
+              <p class="no-data-message">No response headers.</p>
+            </ng-template>
+          </div>
+        </section>
+        <section class="details-section">
+          <h2>Response Cookies</h2>
+          <pre class="code-block custom-scrollbar">{{ formatCookies(fullDetailRequest.responseCookies) }}</pre>
+          <p *ngIf="!fullDetailRequest.responseCookies || fullDetailRequest.responseCookies.length === 0" class="no-data-message">No response cookies.</p>
+        </section>
+      </div>
+    </div>
+  </ng-container>
+</div>

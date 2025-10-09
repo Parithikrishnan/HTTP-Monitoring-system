@@ -1,0 +1,556 @@
+/* src/app/pages/dashboard/dashboard.scss */
+// 1. @use statements must come FIRST, after any BOM (Byte OMark)
+@use "sass:color";
+// 2. Then @import statements
+@import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@300;400;500;700&family=Orbitron:wght@400;500;700&display=swap');
+
+// --- Variables ---
+$primary-color: #00e676; // Bright green for accents, success
+$secondary-color: #00b0ff; // Blue for secondary actions
+$danger-color: #ff1744; // Red for errors, critical actions
+$warning-color: #ffea00; // Yellow for warnings
+$dark-bg-color: #1a1a2e; // Deep dark background
+$dark-card-bg: #2a2a4a; // Slightly lighter dark for cards
+$dark-border-color: #4a4a6e; // Border color for separation
+$text-color-light: #e0e0e0; // Light text on dark background
+$text-color-muted: #b0b0d0; // Muted text for descriptions
+$code-bg-color: #0d0d1a; // Even darker for code blocks
+$code-text-color: #c9d1d9; // Light grey for code
+$selection-bg: #3f3f6f; // Background for selected items
+$font-primary: 'Roboto Mono', monospace;
+$font-header: 'Orbitron', sans-serif;
+$border-radius: 8px;
+$padding-base: 16px;
+$transition-speed: 0.2s ease-in-out;
+
+// --- Mixins ---
+@mixin custom-scrollbar {
+  &::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  &::-webkit-scrollbar-track {
+    background: color.adjust($dark-card-bg, $lightness: -5%);
+    border-radius: 10px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: $dark-border-color;
+    border-radius: 10px;
+    &:hover {
+      background: color.adjust($dark-border-color, $lightness: 10%);
+    }
+  }
+}
+@mixin button-styles($bg-color, $text-color: white) {
+  background-color: $bg-color;
+  color: $text-color;
+  border: none;
+  padding: 10px 18px;
+  border-radius: $border-radius;
+  cursor: pointer;
+  font-family: $font-primary;
+  font-size: 0.95em;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: background-color $transition-speed, transform $transition-speed;
+  &:hover {
+    filter: brightness(1.1);
+    transform: translateY(-1px);
+  }
+  &:active {
+    transform: translateY(0);
+  }
+  &.primary {
+    background-color: $primary-color;
+    color: $dark-bg-color;
+  }
+  &.danger {
+    background-color: $danger-color;
+  }
+  &.primary-outline {
+    background-color: transparent;
+    border: 1px solid $primary-color;
+    color: $primary-color;
+    &:hover {
+      background-color: rgba($primary-color, 0.1);
+      color: color.adjust($primary-color, $lightness: 10%);
+    }
+  }
+  &.secondary-outline {
+    background-color: transparent;
+    border: 1px solid $secondary-color;
+    color: $secondary-color;
+    &:hover {
+      background-color: rgba($secondary-color, 0.1);
+      color: color.adjust($secondary-color, $lightness: 10%);
+    }
+  }
+}
+// New mixin for common code block styles
+@mixin code-block-styles {
+  background-color: $code-bg-color;
+  border-radius: 4px;
+  padding: 10px;
+  font-family: $font-primary;
+  font-size: 0.85em;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: $code-text-color;
+  max-height: 150px;
+  overflow-y: auto;
+  @include custom-scrollbar;
+  border: 1px solid color.adjust($code-bg-color, $lightness: 5%);
+}
+
+// --- Base Styles ---
+.dashboard-container {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background-color: $dark-bg-color;
+  color: $text-color-light;
+  font-family: $font-primary;
+  padding: $padding-base * 2;
+  gap: $padding-base * 2;
+  // Global resets/defaults for this container
+  h1, h2, h3 {
+    font-family: $font-header;
+    color: $primary-color;
+    margin-bottom: $padding-base;
+  }
+  p {
+    line-height: 1.6;
+  }
+}
+// --- Header ---
+.dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: $padding-base;
+  border-bottom: 1px solid $dark-border-color;
+  background-color: color.adjust($dark-bg-color, $lightness: 3%);
+  border-radius: $border-radius;
+  .header-left {
+    .logo-text {
+      font-size: 2.2em;
+      font-weight: 700;
+      color: $primary-color;
+      letter-spacing: 2px;
+      margin: 0;
+      text-shadow: 0 0 10px rgba($primary-color, 0.5);
+    }
+    .tagline {
+      font-family: $font-primary;
+      font-size: 0.9em;
+      color: $text-color-muted;
+      margin: 0;
+      letter-spacing: 1px;
+    }
+  }
+  .header-actions {
+    display: flex;
+    gap: $padding-base;
+    .action-button {
+      @include button-styles(color.adjust($dark-card-bg, $lightness: 10%), $text-color-light);
+    }
+  }
+}
+// --- Loading / Error States ---
+.loading-state, .error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  background-color: $dark-card-bg;
+  border-radius: $border-radius;
+  padding: $padding-base * 2;
+  margin-top: $padding-base * 2;
+  .spinner {
+    border: 4px solid rgba($primary-color, 0.3);
+    border-top: 4px solid $primary-color;
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    animation: spin 1s linear infinite;
+    margin-bottom: $padding-base;
+  }
+  p {
+    font-size: 1.1em;
+    color: $text-color-muted;
+    text-align: center;
+  }
+  .action-button {
+    @include button-styles($primary-color, $dark-bg-color);
+    margin-top: $padding-base;
+  }
+  &.error-state {
+    color: $danger-color;
+    .fas {
+      margin-right: 8px;
+    }
+    .action-button {
+      background-color: $danger-color;
+      color: white;
+    }
+  }
+}
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+// --- Dashboard Stats Grid ---
+.dashboard-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: $padding-base;
+  margin-bottom: $padding-base * 2;
+  .stat-card {
+    background-color: $dark-card-bg;
+    border-radius: $border-radius;
+    padding: $padding-base;
+    display: flex;
+    align-items: center;
+    gap: $padding-base;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    border: 1px solid $dark-border-color;
+    transition: transform $transition-speed;
+    &:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3);
+    }
+    .icon {
+      font-size: 2.5em;
+      color: $primary-color;
+      min-width: 50px;
+      text-align: center;
+    }
+    .stat-content {
+      h3 {
+        margin: 0;
+        font-size: 1.1em;
+        color: $text-color-muted;
+        font-family: $font-primary;
+        font-weight: 500;
+      }
+      .stat-value {
+        margin: 0;
+        font-size: 2em;
+        font-weight: 700;
+        color: $text-color-light;
+        letter-spacing: 1px;
+      }
+    }
+    &.total-requests .icon { color: $secondary-color; }
+    &.successful-requests .icon { color: $primary-color; }
+    &.failed-requests .icon { color: $danger-color; }
+  }
+}
+
+// ------------------------------------
+// --- Request Filters Section ---
+// ------------------------------------
+.request-filters {
+  display: flex;
+  flex-wrap: wrap; 
+  gap: $padding-base;
+  padding: $padding-base;
+  margin-bottom: $padding-base * 1.5;
+  background-color: color.adjust($dark-card-bg, $lightness: -3%); 
+  border-radius: $border-radius;
+  border: 1px solid $dark-border-color;
+  align-items: center; 
+
+  .filter-group {
+    display: flex;
+    align-items: center;
+    gap: 8px; 
+    flex-shrink: 0; /* Prevent method/status filters from shrinking */
+  }
+
+  /* Search Input Styling */
+  .search-filter {
+    flex-grow: 1; 
+    min-width: 250px; 
+    
+    .filter-icon {
+      color: $text-color-muted;
+      font-size: 1.1em;
+    }
+
+    .filter-input {
+      background-color: color.adjust($dark-bg-color, $lightness: 5%);
+      color: $text-color-light;
+      border: 1px solid $dark-border-color;
+      border-radius: 4px;
+      padding: 8px 12px;
+      font-family: $font-primary;
+      font-size: 0.9em;
+      transition: border-color $transition-speed, box-shadow $transition-speed;
+      flex-grow: 1;
+
+      &:focus {
+        outline: none;
+        border-color: $secondary-color;
+        box-shadow: 0 0 5px rgba($secondary-color, 0.5);
+      }
+      &::placeholder {
+        color: $text-color-muted;
+      }
+    }
+  }
+
+  /* Dropdown Filter Styling */
+  .dropdown-filter {
+    .filter-label {
+      color: $text-color-muted;
+      font-size: 0.9em;
+      font-weight: 500;
+      white-space: nowrap; 
+    }
+
+    .filter-select {
+      background-color: color.adjust($dark-bg-color, $lightness: 5%);
+      color: $text-color-light;
+      border: 1px solid $dark-border-color;
+      border-radius: 4px;
+      padding: 8px 12px;
+      font-family: $font-primary;
+      font-size: 0.9em;
+      cursor: pointer;
+      appearance: none; 
+      -webkit-appearance: none;
+      /* Custom dropdown arrow - adjusted color for better contrast */
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%23b0b0d0' viewBox='0 0 24 24'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E"); 
+      background-repeat: no-repeat;
+      background-position: right 8px center;
+      padding-right: 25px; 
+
+      &:focus {
+        outline: none;
+        border-color: $secondary-color;
+      }
+      option {
+        background-color: $dark-bg-color;
+        color: $text-color-light;
+      }
+    }
+  }
+  
+  /* Clear Filters Button */
+  .clear-filters-button {
+      @include button-styles(transparent); /* Use mixin for structure */
+      margin-left: auto; 
+      flex-shrink: 0; 
+  }
+}
+// ------------------------------------
+
+// --- Request List (now full width when not in full details view) ---
+.request-list-full-width {
+  flex-grow: 1; /* Allow it to fill available space */
+  display: flex; /* Make it a flex container to allow the card to flex */
+  flex-direction: column; /* Stack children vertically */
+  .request-list-card {
+    background-color: $dark-card-bg;
+    border-radius: $border-radius;
+    padding: $padding-base;
+    border: 1px solid $dark-border-color;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1; // Allow the card to fill the space of its parent
+    h2 {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 1.5em;
+      margin-bottom: $padding-base;
+      color: $primary-color;
+      flex-shrink: 0; // Prevent heading from shrinking
+      .fas {
+        color: $text-color-muted;
+      }
+    }
+    .request-list-header {
+      display: grid;
+      grid-template-columns: 0.7fr 0.6fr 2fr 0.8fr 1.2fr;
+      gap: 10px;
+      padding: 10px $padding-base;
+      background-color: color.adjust($dark-card-bg, $lightness: 5%); // Using color.adjust
+      border-bottom: 1px solid $dark-border-color;
+      font-weight: 500;
+      color: $text-color-muted;
+      font-size: 0.9em;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-radius: $border-radius $border-radius 0 0; // Rounded top corners
+      flex-shrink: 0; // Prevent header from shrinking
+    }
+    .request-list-body {
+      flex-grow: 1;
+      overflow-y: auto;
+      min-height: 200px; /* Ensure a minimum height for the scrollable area */
+      @include custom-scrollbar;
+      border-radius: 0 0 $border-radius $border-radius; // Rounded bottom corners
+      .request-item {
+        display: grid;
+        grid-template-columns: 0.7fr 0.6fr 2fr 0.8fr 1.2fr;
+        gap: 10px;
+        padding: 12px $padding-base;
+        border-bottom: 1px solid color.adjust($dark-card-bg, $lightness: -3%); // Using color.adjust
+        cursor: pointer;
+        transition: background-color $transition-speed, border-color $transition-speed;
+        &:last-child {
+          border-bottom: none;
+        }
+        &:hover {
+          background-color: rgba($selection-bg, 0.5);
+        }
+        &.selected {
+          background-color: $selection-bg;
+          border-left: 3px solid $primary-color;
+          padding-left: $padding-base - 3px;
+          box-shadow: inset 0 0 10px rgba($primary-color, 0.1);
+        }
+        span {
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          font-size: 0.9em;
+        }
+        .status-indicator {
+          display: inline-block;
+          padding: 3px 8px;
+          border-radius: 4px;
+          font-weight: bold;
+          font-size: 0.8em;
+          text-align: center;
+          &.status-2xx { background-color: rgba($primary-color, 0.2); color: $primary-color; }
+          &.status-3xx { background-color: rgba($secondary-color, 0.2); color: $secondary-color; }
+          &.status-4xx { background-color: rgba($warning-color, 0.2); color: $warning-color; }
+          &.status-5xx { background-color: rgba($danger-color, 0.2); color: $danger-color; }
+          &.status-1xx, &.status-default { background-color: rgba($text-color-muted, 0.1); color: $text-color-muted; }
+        }
+        .method-tag {
+          padding: 3px 8px;
+          border-radius: 4px;
+          font-weight: bold;
+          font-size: 0.8em;
+          text-align: center;
+          color: white;
+          background-color: rgba($text-color-muted, 0.3);
+          &.method-get { background-color: rgba($secondary-color, 0.6); }
+          &.method-post { background-color: rgba($primary-color, 0.6); }
+          &.method-put { background-color: rgba($warning-color, 0.6); }
+          &.method-delete { background-color: rgba($danger-color, 0.6); }
+          &.method-patch { background-color: rgba($text-color-muted, 0.6); }
+          &.method-options { background-color: rgba($dark-border-color, 0.6); }
+        }
+        .url-path {
+          color: $text-color-light;
+        }
+        .duration-time {
+          color: $text-color-muted;
+          font-family: $font-primary;
+        }
+        .timestamp-text {
+          color: $text-color-muted;
+          font-size: 0.85em;
+        }
+      }
+    }
+  }
+}
+.no-data-message {
+  text-align: center;
+  padding: $padding-base * 2;
+  color: $text-color-muted;
+  font-size: 1.1em;
+  .fas {
+    margin-right: 8px;
+    color: $text-color-muted;
+  }
+}
+// --- Full Details View ---
+.full-details-view {
+  flex-grow: 1;
+  background-color: $dark-card-bg;
+  border-radius: $border-radius;
+  padding: $padding-base * 2;
+  border: 1px solid $dark-border-color;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+  h1 {
+    font-size: 2em;
+    color: $primary-color;
+    border-bottom: 2px solid $dark-border-color;
+    padding-bottom: $padding-base;
+    margin-bottom: $padding-base * 2;
+  }
+  .loading-state.full-page-loader, .error-state.full-page-error {
+    min-height: 400px; 
+  }
+  .full-details-content {
+    .details-section {
+      margin-bottom: $padding-base * 2;
+      h2 {
+        font-size: 1.6em;
+        color: $secondary-color;
+        margin-bottom: $padding-base;
+        border-bottom: 1px dotted $dark-border-color;
+        padding-bottom: 8px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: $padding-base;
+        margin-bottom: $padding-base;
+        .summary-item {
+          background-color: color.adjust($dark-card-bg, $lightness: 2%); 
+          padding: 10px $padding-base;
+          border-radius: 6px;
+          border: 1px solid color.adjust($dark-border-color, $lightness: -5%); 
+          font-size: 0.95em;
+          strong {
+            color: $text-color-muted;
+            margin-right: 5px;
+          }
+          span {
+            color: $text-color-light;
+          }
+          &.full-width {
+            grid-column: 1 / -1; 
+            .long-url {
+              word-break: break-all;
+              font-size: 0.9em;
+              color: $warning-color; 
+            }
+          }
+        }
+      }
+      .code-block {
+        @include code-block-styles; 
+        max-height: 400px; 
+      }
+      .headers-list {
+        background-color: $code-bg-color;
+        border-radius: 4px;
+        padding: $padding-base;
+        border: 1px solid color.adjust($code-bg-color, $lightness: 5%); 
+        max-height: 300px;
+        overflow-y: auto;
+        @include custom-scrollbar;
+        .header-item {
+          padding: 5px 0;
+          border-bottom: 1px dotted rgba($dark-border-color, 0.5);
+          display: flex;
+        } 
+      }
+    }
+  }
+}
