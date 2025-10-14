@@ -1,10 +1,10 @@
 // src/app/pages/dashboard/dashboard.ts
 import { Component, OnInit } from '@angular/core';
-import { HttpClient, HttpClientModule } from '@angular/common/http';
+import { HttpClient, HttpClientModule, HttpErrorResponse } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { CommonModule, KeyValuePipe } from '@angular/common';
-import { FormsModule } from '@angular/forms'; // <-- Required for [(ngModel)]
-import { Observable, of } from 'rxjs';
+import { FormsModule } from '@angular/forms';
+import { Observable, of, throwError } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 import { AuthService } from '../../services/auth.service';
 
@@ -27,110 +27,84 @@ export interface RequestData {
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  // Add FormsModule to imports for [(ngModel)] to work
-  imports: [CommonModule, HttpClientModule, KeyValuePipe, FormsModule], 
+  imports: [CommonModule, HttpClientModule, KeyValuePipe, FormsModule],
   templateUrl: './dashboard.html',
   styleUrls: ['./dashboard.scss'],
 })
 export class DashboardComponent implements OnInit {
   // --- Core Data & State ---
   requestList: RequestData[] = [];
-  filteredRequestList: RequestData[] = []; // List shown in the table
-  
-  fullDetailRequest?: RequestData; // Request currently displayed in full view
-  showFullDetails: boolean = false; // Controls which view is active
-  
+  filteredRequestList: RequestData[] = [];
+
+  fullDetailRequest?: RequestData;
+  showFullDetails: boolean = false;
+
   // --- Loading/Error States ---
-  loading = false; 
-  error: string | null = null; 
+  loading = false;
+  error: string | null = null;
   loadingFullDetails: boolean = false;
   fullDetailsError: string | null = null;
-  
+
   // --- Filter Properties (Matching HTML ngModel) ---
   filterTerm: string = '';
   filterStatus: 'all' | '2xx' | '3xx' | '4xx' | '5xx' = 'all';
   filterMethod: 'all' | 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'OPTIONS' = 'all';
 
-  private readonly API_BASE_URL = 'http://localhost:3000';
+  // Hardcoded API Base URL - As requested, without environment files
+  private readonly API_BASE_URL = 'http://192.168.167.237:3000';
 
   constructor(private http: HttpClient, private router: Router, private authService: AuthService) {}
 
   ngOnInit(): void {
-    // Initial fetch of the list data
     this.fetchRequests();
   }
 
-  /**
-   * Fetches the initial list of requests from the API.
-   * FIX: This now correctly calls a single list endpoint, assuming the list endpoint
-   * returns enough data for the table and stats (minus the large bodies/headers).
-   */
   fetchRequests(): void {
     this.loading = true;
     this.error = null;
     this.showFullDetails = false;
 
-    // Use a simpler list endpoint, assuming it returns core RequestData fields
     this.http.get<RequestData[]>(`${this.API_BASE_URL}/requests`).pipe(
-      // We don't need switchMap/forkJoin here, as we only load details on click
-      catchError(overallError => {
-        console.error('Error fetching request list:', overallError);
-        this.error = 'Failed to load request data. Please ensure the backend server is running.';
-        this.loading = false;
-        return of([]); // Return an empty array on error to stop subscription
-      })
+      catchError(this.handleError<RequestData[]>('fetchRequests', []))
     ).subscribe({
       next: (requests: RequestData[]) => {
         this.requestList = requests;
         this.loading = false;
-        // Apply filters once data is loaded
-        this.applyFilters(); 
+        this.applyFilters();
       },
       error: (err) => {
-        // This 'error' handler catches errors not caught by the pipe (rare, but good practice)
-        console.error('Subscription error during list fetch:', err);
-        this.error = this.error || 'An unexpected error occurred during list fetching.';
-        this.loading = false;
+        // handleError already sets `this.error` and `this.loading`
+        console.error('Subscription error after handleError for list:', err);
       }
     });
   }
 
-  /**
-   * Implements the filtering logic based on user input.
-   */
   applyFilters(): void {
     let tempRequests = this.requestList;
 
-    // 1. Search Filter (URL or Method)
     if (this.filterTerm) {
       const term = this.filterTerm.toLowerCase();
       tempRequests = tempRequests.filter(req =>
         req.url.toLowerCase().includes(term) ||
-        req.method.toLowerCase().includes(term)
+        req.method.toLowerCase().includes(term) ||
+        String(req.status).includes(term)
       );
     }
 
-    // 2. Status Filter
     if (this.filterStatus !== 'all') {
-      const prefix = parseInt(this.filterStatus.charAt(0)); // e.g., '2' from '2xx'
-      tempRequests = tempRequests.filter(req => 
+      const prefix = parseInt(this.filterStatus.charAt(0));
+      tempRequests = tempRequests.filter(req =>
         Math.floor(req.status / 100) === prefix
       );
     }
 
-    // 3. Method Filter
     if (this.filterMethod !== 'all') {
-      tempRequests = tempRequests.filter(req => 
-        req.method === this.filterMethod
-      );
+      tempRequests = tempRequests.filter(req => req.method === this.filterMethod);
     }
 
     this.filteredRequestList = tempRequests;
   }
 
-  /**
-   * Resets all filters to their default state.
-   */
   clearFilters(): void {
     this.filterTerm = '';
     this.filterStatus = 'all';
@@ -138,25 +112,22 @@ export class DashboardComponent implements OnInit {
     this.applyFilters();
   }
 
-  /**
-   * Switches to the full details view and fetches the complete request data.
-   */
   viewFullDetails(req: RequestData): void {
     this.fullDetailRequest = undefined;
     this.loadingFullDetails = true;
     this.fullDetailsError = null;
     this.showFullDetails = true;
 
-    // Fetch full details (including body/headers/cookies) for the selected request
-    this.http.get<RequestData>(`${this.API_BASE_URL}/requests/${req.id}`).subscribe({
+    this.http.get<RequestData>(`${this.API_BASE_URL}/requests/${req.id}`).pipe(
+      catchError(this.handleError<RequestData>('viewFullDetails', undefined, true, `details for request ID ${req.id}`))
+    ).subscribe({
       next: (data) => {
         this.fullDetailRequest = data;
         this.loadingFullDetails = false;
       },
       error: (err) => {
-        console.error('Error fetching full request details:', err);
-        this.fullDetailsError = `Failed to load full details for request ID ${req.id}. Please ensure the backend server is running and the ID is valid.`;
-        this.loadingFullDetails = false;
+        // handleError should have already set loadingFullDetails and fullDetailsError
+        console.error('Subscription error after handleError for details:', err);
       }
     });
   }
@@ -165,6 +136,7 @@ export class DashboardComponent implements OnInit {
     this.showFullDetails = false;
     this.fullDetailRequest = undefined;
     this.fullDetailsError = null;
+    this.selectedRequest = undefined;
   }
 
   refreshNo(): void {
@@ -173,25 +145,16 @@ export class DashboardComponent implements OnInit {
 
   logout(): void {
     this.authService.logout();
-    this.router.navigate(['/login']); // Assuming a login route
+    this.router.navigate(['/login']);
   }
 
-  // --- HTML Helper Getters/Methods ---
-
-  // NOTE: selectedRequest, selectRequest, clearSelection, and openDetailPage 
-  // are largely redundant given the direct (click)="viewFullDetails(req)" in the HTML.
-  // I've kept them minimal but they could be removed entirely.
-  
-  // The 'selected' class logic in HTML still uses selectedRequest?.id === req.id.
   selectedRequest?: RequestData;
   selectRequest(req: RequestData): void {
-    // Only set a visual selection if not in full detail mode
-    if (!this.showFullDetails) { 
+    if (!this.showFullDetails) {
       this.selectedRequest = req;
     }
   }
-  
-  // Stats getters use the *unfiltered* requestList for totals
+
   get totalRequests(): number {
     return this.requestList?.length || 0;
   }
@@ -203,17 +166,17 @@ export class DashboardComponent implements OnInit {
   get failedRequests(): number {
     return this.requestList?.filter(r => r.status >= 400).length || 0;
   }
-  
-  // --- Formatting Functions ---
-  
+
   shortUrl(url: string): string {
     if (!url) return '';
     try {
-      const urlObj = new URL(url.startsWith('http') ? url : `http://fake.com${url}`);
+      const urlObj = new URL(url.startsWith('http') ? url : `http://dummy.com${url}`);
       const pathname = urlObj.pathname;
-      return pathname.length > 40 ? pathname.substring(0, 37) + '...' : pathname;
-    } catch (e) {
-      return url.length > 40 ? url.substring(0, 37) + '...' : url;
+      const maxLength = 40;
+      return pathname.length > maxLength ? pathname.substring(0, maxLength - 3) + '...' : pathname;
+    } catch {
+      const maxLength = 40;
+      return url.length > maxLength ? url.substring(0, maxLength - 3) + '...' : url;
     }
   }
 
@@ -230,7 +193,7 @@ export class DashboardComponent implements OnInit {
     try {
         return new Date(ts).toLocaleString();
     } catch {
-        return ts; // Return raw timestamp if date parsing fails
+        return ts;
     }
   }
 
@@ -247,16 +210,68 @@ export class DashboardComponent implements OnInit {
     }
     try {
       const dataStr = String(data);
-      // Attempt to parse only if it looks like JSON (starts with { or [)
       if (dataStr.trim().startsWith('{') || dataStr.trim().startsWith('[')) {
         const parsed = JSON.parse(dataStr);
         return JSON.stringify(parsed, null, 2);
       }
-      // If not JSON, return the string content
       return dataStr;
-    } catch (e) {
-      // If parsing failed, return the original data as a string
+    } catch {
       return String(data);
     }
+  }
+
+  /**
+   * Generic error handler for HTTP requests.
+   *
+   * @param operation - Name of the operation that failed.
+   * @param result - Optional value to return as the observable result.
+   * @param isFullDetails - True if handling error for full request details.
+   * @param context - Additional context for the error message.
+   */
+  private handleError<T>(operation = 'operation', result?: T, isFullDetails: boolean = false, context: string = ''): (error: HttpErrorResponse) => Observable<T> {
+    return (httpError: HttpErrorResponse): Observable<T> => {
+      console.error(`${operation} failed:`, httpError);
+
+      let userMessage = `Failed to ${operation}.`;
+      // The loading and error states are set within the logic below based on 'isFullDetails'
+      // No need to declare target states as separate variables here.
+
+      if (context) {
+        userMessage = `Failed to load ${context}.`;
+      }
+
+      if (httpError.error instanceof ErrorEvent) {
+        userMessage = `Network error: Cannot connect to backend server. Please ensure the server is running.`;
+      } else {
+        switch (httpError.status) {
+          case 0: // This often indicates a network issue or CORS block
+            userMessage = `Network error: Cannot connect to backend server. Please ensure the server is running and accessible at ${this.API_BASE_URL}.`;
+            break;
+          case 404:
+            userMessage = `Resource not found. The API endpoint might be incorrect or the item does not exist.`;
+            if (isFullDetails) userMessage = `${context} not found.`;
+            break;
+          case 500:
+          case 502:
+          case 503:
+          case 504:
+            userMessage = `Backend server error (${httpError.status}). The server or database might be unavailable.`;
+            break;
+          default:
+            userMessage = `An error occurred (${httpError.status}): ${httpError.message || httpError.statusText}`;
+        }
+      }
+
+      // Set component's error state
+      if (isFullDetails) {
+        this.fullDetailsError = userMessage;
+        this.loadingFullDetails = false;
+      } else {
+        this.error = userMessage;
+        this.loading = false;
+      }
+
+      return of(result as T);
+    };
   }
 }

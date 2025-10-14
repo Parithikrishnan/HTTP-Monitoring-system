@@ -1,205 +1,146 @@
-// server.js (your backend API server)
+// server.js - VERY SIMPLE, NO LOGGING VERSION
 const express = require("express");
 const cors = require("cors");
-const { MongoClient, ObjectId } = require('mongodb');
+const { MongoClient, ObjectId } = require("mongodb");
 
-// --- Configuration ---
-const PORT = 3000; // Your backend server will listen on this port
-const MONGODB_URI = "mongodb://127.0.0.1:27017";
-const DB_NAME = "trafficlogger";
-const COLLECTION_NAME = "httptrafficlogs"; // Collection where mitmproxy will store logs
+// --- Configuration (override with environment variables) ---
+const PORT = Number(process.env.PORT || 3000);
+const HOST = "0.0.0.0";
+const MONGODB_URI = process.env.MONGODB_URI || "mongodb://127.0.0.1:27017";
+const DB_NAME = process.env.DB_NAME || "trafficlogger";
+const COLLECTION_NAME = process.env.COLLECTION_NAME || "httptrafficlogs";
 
+// --- MongoDB connection management ---
 let db;
 let mongoClient;
 
-// --- MongoDB Connection Management ---
 async function connectDB() {
-    console.log("Attempting to connect to MongoDB for backend server...");
-    mongoClient = new MongoClient(MONGODB_URI);
-    try {
-        await mongoClient.connect();
-        console.log("Backend server connected to MongoDB successfully!");
-        db = mongoClient.db(DB_NAME);
-        return db;
-    } catch (error) {
-        console.error("Backend server ERROR connecting to MongoDB:", error);
-        console.error("Please ensure your MongoDB server is running on", MONGODB_URI);
-        process.exit(1);
-    }
+  // NO LOGGING HERE
+  mongoClient = new MongoClient(MONGODB_URI, { useUnifiedTopology: true });
+  await mongoClient.connect();
+  db = mongoClient.db(DB_NAME);
+  return db;
 }
 
-async function closeDB() {
-    if (mongoClient) {
-        await mongoClient.close();
-        console.log("Backend server disconnected from MongoDB.");
-    }
-}
-
-// --- Express App Setup ---
+// --- Express setup ---
 const app = express();
-app.use(cors());
 app.use(express.json());
 
-// --- API Routes ---
+// CORS: allow default dev origins + environment overrides
+const defaultOrigins = [
+  "http://localhost:4200",
+  "http://localhost:3000", "http://192.168.167.237:4200"
+];
+const allowedOrigins = (process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(",") : defaultOrigins);
 
+app.use(cors({
+  origin: function(origin, callback) {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      return callback(null, true);
+    } else {
+      callback(new Error("CORS policy: origin not allowed: " + origin));
+    }
+  },
+  credentials: true
+}));
+
+// --- Routes ---
 app.get("/", (req, res) => {
-    res.json({ message: "Hello from the backend server! Your request was successfully processed." });
+  res.json({ message: "Hello from backend server", host: HOST, port: PORT });
 });
 
-app.get("/requests", async (req, res) => {
-    try {
-        const pipeline = [
-            {
-                $match: { direction: 'incoming_request' }
-            },
-            {
-                $lookup: {
-                    from: COLLECTION_NAME,
-                    localField: '_id',
-                    foreignField: 'linkedRequestId',
-                    as: 'response'
-                }
-            },
-            {
-                $unwind: {
-                    path: '$response',
-                    preserveNullAndEmptyArrays: true
-                }
-            },
-            {
-                $project: {
-                    id: { "$toString": "$_id" },
-                    method: '$method',
-                    url: '$url',
-                    status: '$response.statusCode',
-                    timestamp: '$timestamp',
-                    duration: {
-                        $cond: {
-                            if: '$response.timestamp',
-                            then: { $subtract: ['$response.timestamp', '$timestamp'] },
-                            else: null
-                        }
-                    }
-                }
-            },
-            {
-                $sort: { timestamp: -1 }
-            }
-        ];
+app.get("/health", (req, res) => {
+  res.json({ status: "ok", time: new Date().toISOString() });
+});
 
-        const requestsList = await db.collection(COLLECTION_NAME).aggregate(pipeline).toArray();
-        res.json(requestsList);
-    } catch (error) {
-        console.error("Error fetching requests list from MongoDB:", error);
-        res.status(500).json({ error: "Failed to retrieve requests list." });
-    }
+// List requests (aggregated pipeline)
+app.get("/requests", async (req, res) => {
+  try {
+    const pipeline = [
+      { $match: { direction: "incoming_request" } },
+      { $lookup: { from: COLLECTION_NAME, localField: "_id", foreignField: "linkedRequestId", as: "response" } },
+      { $unwind: { path: "$response", preserveNullAndEmptyArrays: true } },
+      { $project: {
+          id: { $toString: "$_id" },
+          method: "$method",
+          url: "$url",
+          status: "$response.statusCode",
+          timestamp: "$timestamp",
+          duration: { $cond: { if: "$response.timestamp", then: { $subtract: ["$response.timestamp", "$timestamp"] }, else: null } }
+        }
+      },
+      { $sort: { timestamp: -1 } }
+    ];
+    const list = await db.collection(COLLECTION_NAME).aggregate(pipeline).toArray();
+    res.json(list);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to retrieve requests" });
+  }
 });
 
 app.get("/requests/:id", async (req, res) => {
-    try {
-        const requestId = new ObjectId(req.params.id);
-
-        const pipeline = [
-            {
-                $match: { _id: requestId, direction: 'incoming_request' }
-            },
-            {
-                $lookup: {
-                    from: COLLECTION_NAME,
-                    localField: '_id',
-                    foreignField: 'linkedRequestId',
-                    as: 'response'
-                }
-            },
-            {
-                $unwind: {
-                    path: '$response',
-                    preserveNullAndEmptyArrays: true
-                }
-            },
-            {
-                $project: {
-                    _id: 0,
-                    id: { "$toString": "$_id" },
-                    method: '$method',
-                    url: '$url',
-                    timestamp: '$timestamp',
-                    requestBody: '$body',
-                    requestHeaders: '$headers',
-                    // Assuming headers.cookie is a string, split into array for display
-                    requestCookies: { $split: [{ $ifNull: ['$headers.cookie', ''] }, '; '] },
-                    status: '$response.statusCode',
-                    duration: {
-                        $cond: {
-                            if: '$response.timestamp',
-                            then: { $subtract: ['$response.timestamp', '$timestamp'] },
-                            else: null
-                        }
-                    },
-                    responseBody: '$response.body',
-                    responseHeaders: '$response.headers',
-                    // Assuming headers.set-cookie is an array of strings, or a single string
-                    responseCookies: {
-                        $cond: {
-                            if: { $isArray: '$response.headers.set-cookie' },
-                            then: '$response.headers.set-cookie',
-                            else: { $split: [{ $ifNull: [{ $arrayElemAt: ['$response.headers.set-cookie', 0] }, ''] }, '; '] }
-                        }
-                    }
-                }
+  try {
+    const requestId = new ObjectId(req.params.id);
+    const pipeline = [
+      { $match: { _id: requestId, direction: "incoming_request" } },
+      { $lookup: { from: COLLECTION_NAME, localField: "_id", foreignField: "linkedRequestId", as: "response" } },
+      { $unwind: { path: "$response", preserveNullAndEmptyArrays: true } },
+      { $project: {
+          _id: 0,
+          id: { $toString: "$_id" },
+          method: "$method",
+          url: "$url",
+          timestamp: "$timestamp",
+          requestBody: "$body",
+          requestHeaders: "$headers",
+          requestCookies: { $split: [{ $ifNull: ["$headers.cookie", ""] }, "; "] },
+          status: "$response.statusCode",
+          duration: { $cond: { if: "$response.timestamp", then: { $subtract: ["$response.timestamp", "$timestamp"] }, else: null } },
+          responseBody: "$response.body",
+          responseHeaders: "$response.headers",
+          responseCookies: {
+            $cond: {
+              if: { $isArray: "$response.headers.set-cookie" },
+              then: "$response.headers.set-cookie",
+              else: { $split: [{ $ifNull: [{ $arrayElemAt: ["$response.headers.set-cookie", 0] }, ""] }, "; "] }
             }
-        ];
-
-        const requestDetail = await db.collection(COLLECTION_NAME).aggregate(pipeline).toArray();
-
-        if (requestDetail.length > 0) {
-            const finalDetail = requestDetail[0];
-            // Stringify bodies if they are objects for consistent frontend display
-            finalDetail.requestBody = (typeof finalDetail.requestBody === 'object' && finalDetail.requestBody !== null)
-                                      ? JSON.stringify(finalDetail.requestBody, null, 2)
-                                      : finalDetail.requestBody;
-            finalDetail.responseBody = (typeof finalDetail.responseBody === 'object' && finalDetail.responseBody !== null)
-                                       ? JSON.stringify(finalDetail.responseBody, null, 2)
-                                       : finalDetail.responseBody;
-
-            res.json(finalDetail);
-        } else {
-            res.status(404).json({ error: "Request not found" });
+          }
         }
-    } catch (error) {
-        console.error(`Error fetching request details for ID ${req.params.id} from MongoDB:`, error);
-        if (error.name === 'BSONTypeError') {
-            return res.status(400).json({ error: "Invalid Request ID format." });
-        }
-        res.status(500).json({ error: "Failed to retrieve request details." });
-    }
+      }
+    ];
+
+    const detail = await db.collection(COLLECTION_NAME).aggregate(pipeline).toArray();
+    if (detail.length === 0) return res.status(404).json({ error: "Not found" });
+
+    const final = detail[0];
+    if (typeof final.requestBody === "object" && final.requestBody !== null) final.requestBody = JSON.stringify(final.requestBody, null, 2);
+    if (typeof final.responseBody === "object" && final.responseBody !== null) final.responseBody = JSON.stringify(final.responseBody, null, 2);
+    return res.json(final);
+  } catch (err) {
+    // Basic error handling for invalid ID format without logging
+    if (err.name === "BSONTypeError" || err.name === "TypeError") return res.status(400).json({ error: "Invalid ID format" });
+    res.status(500).json({ error: "Failed to retrieve request details" });
+  }
 });
 
-
-app.post("/data", (req, res) => {
-    console.log("Received data on /data:", req.body);
-    res.status(200).json({
-        message: "Data received successfully by backend!",
-        receivedData: req.body,
-        processedAt: new Date().toISOString()
-    });
+app.post("/data", async (req, res) => {
+  // This endpoint now simply responds without any logging or database interaction here.
+  res.json({ message: "Data received", processedAt: new Date().toISOString() });
 });
 
-// --- Start Server ---
+// --- Start server + connect to DB ---
 async function startServer() {
+  try {
     await connectDB();
-
-    app.listen(PORT, () => {
-        console.log(`🚀 Backend API Server (server.js) running on http://localhost:${PORT}`);
-        console.log(`Frontend should fetch from http://localhost:${PORT}/requests`);
-        console.log("--------------------------------------------------");
+    app.listen(PORT, HOST, () => {
+      // NO LOGGING HERE - server starts silently
     });
-
-    process.on('SIGINT', async () => {
-        console.log('\nShutting down backend server...');
-        await closeDB();
-        process.exit(0);
-    });
+  } catch (err) {
+    // If connectDB fails, the process will exit silently
+    process.exit(1);
+  }
 }
 
+// Start the server
 startServer();
