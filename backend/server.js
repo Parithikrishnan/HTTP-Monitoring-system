@@ -29,7 +29,7 @@ app.use(express.json());
 // CORS: allow default dev origins + environment overrides
 const defaultOrigins = [
   "http://localhost:4200",
-  "http://localhost:3000", "http://192.168.167.237:4200"
+  "http://localhost:3000", "http://10.110.120.236:4200","http://10.110.120.236:3000"
 ];
 const allowedOrigins = (process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(",") : defaultOrigins);
 

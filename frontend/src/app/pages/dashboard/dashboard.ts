@@ -51,7 +51,7 @@ export class DashboardComponent implements OnInit {
   filterMethod: 'all' | 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'OPTIONS' = 'all';
 
   // Hardcoded API Base URL - As requested, without environment files
-  private readonly API_BASE_URL = 'http://192.168.167.237:3000';
+  private readonly API_BASE_URL = 'http://10.110.120.236:3000';
 
   constructor(private http: HttpClient, private router: Router, private authService: AuthService) {}
 
