@@ -143,7 +143,7 @@ vite.config.ts.timestamp-*
 
 
 frontend/node_modules
-frontend/.angular
+frontend/.angular/cache/20.3.3/frontend
 frontend/.editorconfig
 
 backend/node_modules
